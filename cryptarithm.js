@@ -49,57 +49,76 @@
 // passing around the intermediate mappings that the algorithm is trying
 // on recursive calls.
 //
-function solve_singleop(words, operation, callback, len, mappings) {
-	//console.log("Solve singleop: " + [words, operation, len, mappings]);
+function solve_singleop(words, operation, callback, len, mappings, check_len, debug) {
+    if (debug) {
+        console.log("solve_singleop: " + [words, operation, len, hash_string(mappings), check_len]);
+    }
 
-	// Initialization
-	if (!mappings) {
-		mappings = {};
-	}
-	if (!len) {
-		words = words.map(function(word) {return word.toUpperCase()});
-		var invalid = words.filter(function(word) {
-			return word.split("").filter(function(char) {return char < 'A' || char > 'Z'}).length > 0;
-		});
-		if (invalid.length > 0) {
-			throw "Words have invalid characters: " + invalid;
-		}
-		// len has to be big enough to accomodate the number of digits in the largest possible result.
-		// If you multiply W N-digit numbers, the result will have on the order of W*N digits.
-		len = maxlen(words) * words.length;
-	}
-	if (!callback) {
-		callback = function (mapping, expression, pretty_expression) {
-			console.log(hash_string(mapping) + "\n" + pretty_expression);
-		}
-	}
-	if (!operation) {
-		operation = "+";
-	}
+    // Initialization
+    if (!mappings) {
+        mappings = {};
+    }
+    if (!len) {
+        if (words.length < 3) {
+            throw "Not enough words specified: " + words;
+        }
+        if (words[words.length-1].length < 1) {
+            throw "No result specified"
+        }
+        words = words.map(function(word) {return word.toUpperCase()});
+        var invalid = words.filter(function(word) {
+            return word.split("").filter(function(char) {return char < 'A' || char > 'Z'}).length > 0;
+        });
+        if (invalid.length > 0) {
+            throw "Words have invalid characters: " + invalid;
+        }
+        var chars = {};
+        words.join("").split("").map((i) => chars[i] = 1);
+        chars = Object.keys(chars)
+        if (chars.length > 10) {
+            throw "Too many different letters used: " + chars.join(", ");
+        }
+        len = maxlen(words);
+        // len has to be big enough to accomodate the number of digits in the largest possible result.
+        // If you multiply W N-digit numbers, the result will have on the order of W*N digits.
+        if (!check_len) {
+            check_len = len * words.length;
+        }
+    }
+    if (!check_len) {
+        check_len = len;
+    }
+    if (!callback) {
+        callback = function (mapping, expression, pretty_expression) {
+            console.log(hash_string(mapping) + "\n" + pretty_expression);
+        }
+    }
+    if (!operation) {
+        operation = "+";
+    }
 
-	// Do one layer at a time.  Start with the units place and find all mappings
-	// that satisfy that column.  Then, for all mappings that satisfy that column,
-	// find all mappings that satisfy the tens and ones column.
-	//
-	// We do this recursively, so the way to find all mappings that satisfy the
-	// N least significant place values, we loop over all mappings that satisfy
-	// the N-1 least significate place values, then for each of those, we call
-	// "do_layer" for the Nth place value.  do_layer will look at all possible
-	// additional mappings needed for the new variables found in that Nth place
-	// value.
-	for (var jj = 1; jj < len; jj++) {
-		for (var ii = 0; ii < words.length; ii++) {
-			var word = words[ii];
-			if (word.length > len-jj && !(word[word.length-len-jj] in mappings)) {
-				solve_singleop(words, operation, function (submapping) {
-					//console.log(submapping);
-					do_layer(words, operation, len, submapping, callback);
-				}, len-1, mappings);
-				return;
-			}
-		}
-	}
-	do_layer(words, operation, len, mappings, callback);
+    // Do one layer at a time.  Start with the units place and find all mappings
+    // that satisfy that column.  Then, for all mappings that satisfy that column,
+    // find all mappings that satisfy the tens and ones column.
+    //
+    // We do this recursively, so the way to find all mappings that satisfy the
+    // N least significant place values, we loop over all mappings that satisfy
+    // the N-1 least significate place values, then for each of those, we call
+    // "do_layer" for the Nth place value.  do_layer will look at all possible
+    // additional mappings needed for the new variables found in that Nth place
+    // value.
+    for (var jj = 1; jj < len; jj++) {
+        for (var ii = 0; ii < words.length; ii++) {
+            var word = words[ii];
+            if (word.length > len-jj && !(word[word.length-len-jj] in mappings)) {
+                return solve_singleop(words, operation, function (submapping) {
+                    //console.log(submapping);
+                    return do_layer(words, operation, len, submapping, callback, check_len, debug);
+                }, len-1, mappings, len-1, debug);
+            }
+        }
+    }
+    return do_layer(words, operation, len, mappings, callback, check_len, debug);
 }
 
 //
@@ -109,28 +128,52 @@ function solve_singleop(words, operation, callback, len, mappings) {
 // all new variables that need to be set for this column, and finds
 // all the mappings that will satisfy those new variables.
 //
-function do_layer(words, operation, len, mappings, callback) {
-	if (len) {
-		for (var ii = 0; ii < words.length; ii++) {
-			var word = words[ii];
-			if (word.length >= len && !(word[word.length - len] in mappings)) {
-				var char = word[word.length - len];
-				//console.log("Missing " + char);
-				var values = get_possible_values(char, words, mappings);
-				values.forEach(function(value) {
-					//console.log("Trying " + char + " = " + value);
-					mappings[char] = value;
-					do_layer(words, operation, len, mappings, callback);
-					delete(mappings[char]);
-				});
-				return;
-			}
-		}
-	}
-	if (check_equal(words, operation, len, mappings)) {
-		var expression = substitute(words.slice(0, words.length - 1).join(operation) + "=" + words[words.length - 1], mappings);
-		callback(mappings, expression, pretty_expression(words, operation, mappings));
-	}
+function do_layer(words, operation, len, mappings, callback, check_len, debug) {
+    if (debug) {
+        console.log("do_layer: " + [words, operation, len, hash_string(mappings), check_len]);
+    }
+    if (!operation) {
+        operation = "+";
+    }
+    if (!check_len) {
+        check_len = len;
+    }
+    if (len) {
+        for (var ii = 0; ii < words.length; ii++) {
+            var word = words[ii];
+            if (word.length >= len && !(word[word.length - len] in mappings)) {
+                var char = word[word.length - len];
+                //console.log("Missing " + char);
+                var values = get_possible_values(char, words, mappings);
+                var num_hits = 0;
+                values.forEach(function(value) {
+                    //console.log("Trying " + char + " = " + value);
+                    mappings[char] = value;
+                    num_hits += do_layer(words, operation, len, mappings, callback, check_len, debug);
+                    delete(mappings[char]);
+                });
+                if (debug) {
+                    console.log("do_layer: " + [words, operation, len, hash_string(mappings), check_len] + " returns " + num_hits);
+                }
+                return num_hits;
+            }
+        }
+    }
+    if (check_equal(words, operation, check_len, mappings, debug)) {
+        var expression = substitute(words.slice(0, words.length - 1).join(operation) + "=" + words[words.length - 1], mappings);
+        var result = callback(mappings, expression, pretty_expression(words, operation, mappings));
+        if (isNaN(result)) {
+            result = 1;
+        }
+        if (debug) {
+            console.log("do_layer: " + [words, operation, len, hash_string(mappings), check_len] + " returns " + result);
+        }
+        return result;
+    }
+    if (debug) {
+        console.log("do_layer: " + [words, operation, len, hash_string(mappings), check_len] + " returns 0");
+    }
+    return 0;
 }
 
 // ---------------------------------------------------------- //
@@ -138,56 +181,61 @@ function do_layer(words, operation, len, mappings, callback) {
 //
 
 function hash_string(hash) {
-	return Object.keys(hash).map(function(key) {
-		return key + ":" + hash[key];
-	}).join(",");
+    if (!hash) {
+        return hash;
+    }
+    return Object.keys(hash).map(function(key) {
+        return key + ":" + hash[key];
+    }).join(",");
 }
 
 function get_possible_values(char, words, mappings, values) {
-	var rev_mappings = rev_hash(mappings);
-	if (!values) {
-		values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-	}
-	if (any(words, function(word) { return word[0] == char; })) {
-		values = values.filter(function(elt) {return elt != 0});
-	}
-	return values.filter(function(elt) {return !(elt in rev_mappings)});
+    var rev_mappings = rev_hash(mappings);
+    if (!values) {
+        values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    }
+    // if this character is the first character of any of the words,
+    // then it can't be zero
+    if (any(words, function(word) { return word[0] == char; })) {
+        values = values.filter(function(elt) {return elt != 0});
+    }
+    return values.filter(function(elt) {return !(elt in rev_mappings)});
 }
 
 function rev_hash(hash) {
-	var reverse = {};
-	Object.keys(hash).forEach(function(key) {
-		reverse[hash[key]] = key;
-	});
-	return reverse;
+    var reverse = {};
+    Object.keys(hash).forEach(function(key) {
+        reverse[hash[key]] = key;
+    });
+    return reverse;
 }
 
 function any(array, predicate) {
-	for (var ii = 0; ii < array.length; ii++) {
-		if (predicate(array[ii])) {
-			return true;
-		}
-	}
-	return false;
+    for (var ii = 0; ii < array.length; ii++) {
+        if (predicate(array[ii])) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function all(array, predicate) {
-	for (var ii = 0; ii < array.length; ii++) {
-		if (!predicate(array[ii])) {
-			return false;
-		}
-	}
-	return true;
+    for (var ii = 0; ii < array.length; ii++) {
+        if (!predicate(array[ii])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function maxlen(array) {
-	return array.map(function(word) {return word.length}).reduce(function(a, b) {
-		if (a > b) {
-			return a;
-		} else {
-			return b;
-		}
-	}, 0);
+    return array.map(function(word) {return word.length}).reduce(function(a, b) {
+        if (a > b) {
+            return a;
+        } else {
+            return b;
+        }
+    }, 0);
 }
 
 /*
@@ -196,75 +244,79 @@ function maxlen(array) {
 // are commented out.
 
 function check_desired(words, operation, len, mappings) {
-	var new_words = words.map(function(elt) {return elt.substring(elt.length-len, elt.length);});
-	var desired = new_words[new_words.length-1];
-	return Number(substitute(desired, mappings));
+var new_words = words.map(function(elt) {return elt.substring(elt.length-len, elt.length);});
+var desired = new_words[new_words.length-1];
+return Number(substitute(desired, mappings));
 }
 
 function check_result(words, operation, len, mappings) {
-	var new_words = words.map(function(elt) {return elt.substring(elt.length-len, elt.length);});
-	var operands = new_words.slice(0, new_words.length-1);
-	operands = operands.map(function(word) {return Number(substitute(word, mappings))});
-	var result;
-	if (operation == "+") {
-		result = operands.reduce(function(a, b) {return a + b;}, 0);
-	} else if (operation == "*") {
-		result = operands.reduce(function(a, b) {return a * b;}, 1);
-	}
-	return result % Math.pow(10, len);
+var new_words = words.map(function(elt) {return elt.substring(elt.length-len, elt.length);});
+var operands = new_words.slice(0, new_words.length-1);
+operands = operands.map(function(word) {return Number(substitute(word, mappings))});
+var result;
+if (operation == "+") {
+result = operands.reduce(function(a, b) {return a + b;}, 0);
+} else if (operation == "*") {
+result = operands.reduce(function(a, b) {return a * b;}, 1);
+}
+return result % Math.pow(10, len);
 }
 
 function check_both(words, operation, len, mappings) {
-	return check_desired(words, operation, len, mappings) == check_result(words, operation, len, mappings);
+return check_desired(words, operation, len, mappings) == check_result(words, operation, len, mappings);
 }
 */
 
 // Check if the given mappings satisfy the least-significant <len> columns of
 // the problem.
-function check_equal(words, operation, len, mappings) {
-	var new_words = words;
-	if (len) {
-		new_words = words.map(function(elt) {return elt.substring(elt.length - len, elt.length);});
-	}
-	var desired = new_words[new_words.length - 1];
-	var operands = new_words.slice(0, new_words.length - 1);
-	operands = operands.map(function(word) {return Number(substitute(word, mappings))});
-	var result;
-	if (operation == "+") {
-		result = operands.reduce(function(a, b) {return a + b;}, 0);
-	} else if (operation == "*") {
-		result = operands.reduce(function(a, b) {return a * b;}, 1);
-	} else {
-		throw "Invalid operation '" + operation + "' should be either '+' or '*'";
-	}
-	if (len) {
-		result = result % Math.pow(10, len);
-	}
-	return result == Number(substitute(desired, mappings));
+function check_equal(words, operation, len, mappings, debug) {
+    var new_words = words;
+    if (len) {
+        new_words = words.map(function(elt) {return elt.substring(elt.length - len, elt.length);});
+    }
+    var desired = new_words[new_words.length - 1];
+    var operands = new_words.slice(0, new_words.length - 1);
+    operands = operands.map(function(word) {return Number(substitute(word, mappings))});
+    var result;
+    if (operation == "+") {
+        result = operands.reduce(function(a, b) {return a + b;}, 0);
+    } else if (operation == "*") {
+        result = operands.reduce(function(a, b) {return a * b;}, 1);
+    } else {
+        throw "Invalid operation '" + operation + "' should be either '+' or '*'";
+    }
+    if (len) {
+        result = result % Math.pow(10, len);
+    }
+    var answer = result == Number(substitute(desired, mappings));
+    if (debug) {
+        console.log("check_equal: " + [words, operation, len, hash_string(mappings), answer]);
+    }
+    return answer
 }
 
 // Return a string which is made up of a character repeated len times.
 function repeat(char, len) {
-	return Array(len+1).join(char);
+    return Array(len+1).join(char);
 }
 
 // Return a string of length width by adding padding on the left side of word.
 function pad(word, width, value) {
-	if (!value) {
-		value = " ";
-	}
-	return repeat(value, width - word.length) + word;
+    if (!value) {
+        value = " ";
+    }
+    return repeat(value, width - word.length) + word;
 }
 
 // Format an equation nicely so the place values line up
 function pretty_expression(words, operator, mapping) {
-	if (mapping) {
-		words = words.map(function(word) {return substitute(word, mapping)});
-	}
-	var width = maxlen(words) + 2;
-	words[words.length - 2] = operator + " " + words[words.length - 2];
-	words.splice(words.length - 1, 0, repeat("-", width));
-	return words.map(function(word) {return pad(word, width)}).join("\n");
+    if (mapping) {
+        words = words.map(function(word) {return substitute(word, mapping)});
+    }
+    var width = maxlen(words) + 2;
+    words[words.length - 2] = operator + " " + words[words.length - 2];
+    words.splice(words.length - 1, 0, repeat("-", width));
+    return words.map(function(word) {return pad(word, width)}).join("\n");
 }
 
 // ---------------------------------------------------------- //
@@ -283,32 +335,32 @@ function pretty_expression(words, operator, mapping) {
 // number must not map to zero.
 //
 function solve_general(expression) {
-	expression = expression.toUpperCase();
-	var letters = make_letters(expression);
-	var ntries = 0;
-	permutations([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 0, letters.length, function(values) {
-		var mapping = make_mapping(letters, values);
-		if (check_expression(expression, mapping)) {
-			console.log("GOOD: " + mapping);
-			console.log(substitute(expression, mapping));
-			return true;
-		} else {
-			//console.log("BAD: " + mapping);
-			//console.log(substitute(expression, mapping));
-		}
-		ntries += 1;
-		if (ntries % 1000 == 0) {
-			console.log(Date() + " - " + ntries + " tries.")
-		}
-	})
+    expression = expression.toUpperCase();
+    var letters = make_letters(expression);
+    var ntries = 0;
+    permutations([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 0, letters.length, function(values) {
+        var mapping = make_mapping(letters, values);
+        if (check_expression(expression, mapping)) {
+            console.log("GOOD: " + mapping);
+            console.log(substitute(expression, mapping));
+            return true;
+        } else {
+            //console.log("BAD: " + mapping);
+            //console.log(substitute(expression, mapping));
+        }
+        ntries += 1;
+        if (ntries % 1000 == 0) {
+            console.log(Date() + " - " + ntries + " tries.")
+        }
+    })
 }
 
 // ---------------------------------------------------------- //
 
 function swap(array, ii, jj) {
-	var tmp = array[ii];
-	array[ii] = array[jj];
-	array[jj] = tmp;
+    var tmp = array[ii];
+    array[ii] = array[jj];
+    array[jj] = tmp;
 }
 
 // Given an array, call the function on all permutations
@@ -317,94 +369,109 @@ function swap(array, ii, jj) {
 // iterating.  Otherwise, if the function returns null
 // or false, we'll keep iterating.
 function permutations(array, ii, kk, func) {
-	if (ii == kk || ii == array.length) {
-		return func(array);
-	}
-	var should_stop = permutations(array, ii+1, kk, func);
-	if (should_stop !== null && should_stop) {
-		return should_stop;
-	}
-	for (var jj = ii+1; jj < array.length; jj++) {
-		swap(array, ii, jj);
-		var should_stop = permutations(array, ii+1, kk, func);
-		swap(array, ii, jj);
-		if (should_stop !== null && should_stop) {
-			return should_stop;
-		}
-	}
+    if (ii == kk || ii == array.length) {
+        return func(array);
+    }
+    var should_stop = permutations(array, ii+1, kk, func);
+    if (should_stop !== null && should_stop) {
+        return should_stop;
+    }
+    for (var jj = ii+1; jj < array.length; jj++) {
+        swap(array, ii, jj);
+        var should_stop = permutations(array, ii+1, kk, func);
+        swap(array, ii, jj);
+        if (should_stop !== null && should_stop) {
+            return should_stop;
+        }
+    }
 }
 
 function replace_all(string, old_substring, new_substring) {
-	return string.split(old_substring).join(new_substring);
+    return string.split(old_substring).join(new_substring);
 }
 
 function substitute(string, mapping) {
-	var new_string = string;
-	for (var char in mapping) {
-		new_string = replace_all(new_string, char, mapping[char]);
-	}
-	return new_string;
+    var new_string = string;
+    for (var char in mapping) {
+        new_string = replace_all(new_string, char, mapping[char]);
+    }
+    return new_string;
 }
 
 function check_expression(expression, mapping) {
-	return eval(substitute(expression, mapping));
+    return eval(substitute(expression, mapping));
 }
 
 function make_mapping(letters, values) {
-	var mapping = {};
-	for (var ii = 0; ii < letters.length; ii++) {
-		mapping[letters[ii]] = values[ii];
-	}
-	return mapping;
+    var mapping = {};
+    for (var ii = 0; ii < letters.length; ii++) {
+        mapping[letters[ii]] = values[ii];
+    }
+    return mapping;
 }
 
 function make_letters(string) {
-	var letters = {};
-	for (var ii = 0; ii < string.length; ii++) {
-		var char = string.charAt(ii);
-		if (char >= 'A' && char <= 'Z') {
-			letters[char] = 1;
-		}
-	}
-	return Object.keys(letters);
+    var letters = {};
+    for (var ii = 0; ii < string.length; ii++) {
+        var char = string.charAt(ii);
+        if (char >= 'A' && char <= 'Z') {
+            letters[char] = 1;
+        }
+    }
+    return Object.keys(letters);
 }
 
 // ---------------------------------------------------------- //
 
 addEventListener = function(el, type, fn) { 
-  if (el.addEventListener) { 
-    el.addEventListener(type, fn, false); 
-    return true; 
-  } else if (el.attachEvent) { 
-    var r = el.attachEvent("on" + type, fn); 
-    return r; 
-  } else { 
-    return false; 
-  } 
+    if (el.addEventListener) { 
+        el.addEventListener(type, fn, false); 
+        return true; 
+    } else if (el.attachEvent) { 
+        var r = el.attachEvent("on" + type, fn); 
+        return r; 
+    } else { 
+        return false; 
+    } 
 };
 
 display = function(output) {
     var answers = document.getElementById("answers");
-    answers.innerHTML = "<pre>" + output + "</pre>";
+    answers.innerHTML += "<pre>" + output + "</pre>";
+};
+
+set_display = function(output) {
+    var answers = document.getElementById("answers");
+    answers.innerHTML = "<pre>" + output + "</pre>"
 };
 
 function main() {
-	var solve_button = document.getElementById("solve");
-	addEventListener(solve_button, 'click', function() {
-		var vals = [];
-    	["a", "b", "c", "d"].forEach(function(id) {
-			var input = document.getElementById(id);
-	    	if (input.value != "") {
-				vals.push(input.value);
-			}
-		});
-		var target = document.getElementById("target").value;
-		var operator = document.getElementById("operator").value;
-		vals.push(target);
-		solve_singleop(vals, operator, function (mapping, expression, pretty_expression) {
-			display(hash_string(mapping) + "\n" + pretty_expression);
-		});
-	});
+    var solve_button = document.getElementById("solve");
+    addEventListener(solve_button, 'click', function() {
+        var vals = [];
+        ["a", "b", "c", "d"].forEach(function(id) {
+            var input = document.getElementById(id);
+            if (input.value != "") {
+                vals.push(input.value);
+            }
+        });
+        var target = document.getElementById("target").value;
+        var operator = document.getElementById("operator").value;
+        set_display("");
+        vals.push(target);
+        try {
+            var results = solve_singleop(vals, operator, function (mapping, expression, pretty_expression) {
+                display(hash_string(mapping) + "\n" + pretty_expression);
+            });
+            if (results == 0) {
+                display("No results.");
+            } else {
+                display(results + " results.");
+            }
+        } catch(err) {
+            display(err);
+        }
+    });
 }
 
 // ---------------------------------------------------------- //

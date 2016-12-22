@@ -1,26 +1,27 @@
 <html>
 <head>
+    <meta name=viewport content="width=device-width, initial-scale=1">
 	<script type="text/javascript" src="cryptarithm.js"></script>
 </head>
 <body>
-	<p>
-	word1: <input type="text" id="a" class="in">
+     <form action="javascript:void(0);">
+	word1: <input type="text" id="a" class="in" value="tshirt">
 	<br>
-	word2: <input type="text" id="b" class="in">
+	word2: <input type="text" id="b" class="in" value="skirt">
 	<br>
 	word3: <input type="text" id="c" class="in">
 	<br>
 	word4: <input type="text" id="d" class="in">
 	<br>
-	<select name="operator" id="operator">
+	<select name="operator" id="operator" tabindex=-1>
 		<option value="+">+</option>
 		<option value="*">*</option>
 	</select>
 	<hr>
-	result: <input type="text" id="target" class="in">
+	result: <input type="text" id="target" class="in" value="clothes">
 	<br>
-	<button type="button" id="solve">Solve</button>
-	</p>
+	<button type="submit" id="solve">Solve</button>
+     </form>
 	
 	<div id="answers"></div>
 	<script type="text/javascript">
