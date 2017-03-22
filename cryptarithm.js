@@ -423,7 +423,7 @@ function make_letters(string) {
 
 // ---------------------------------------------------------- //
 
-addEventListener = function(el, type, fn) { 
+var addEventListener = function(el, type, fn) { 
     if (el.addEventListener) { 
         el.addEventListener(type, fn, false); 
         return true; 
@@ -435,12 +435,12 @@ addEventListener = function(el, type, fn) {
     } 
 };
 
-display = function(output) {
+var display = function(output) {
     var answers = document.getElementById("answers");
     answers.innerHTML += "<pre>" + output + "</pre>";
 };
 
-set_display = function(output) {
+var set_display = function(output) {
     var answers = document.getElementById("answers");
     answers.innerHTML = "<pre>" + output + "</pre>"
 };
